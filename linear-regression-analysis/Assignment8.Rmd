@@ -1,0 +1,412 @@
+---
+title: "Assignment 8"
+author: "Saumya Rai"
+date: "2026-11-10"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Background
+
+# Data
+
+## Loading the Data
+
+```{r libraries}
+library(sf)
+library(tmap)
+library(tidyverse)
+library(tidycensus)
+```
+
+```{r}
+nc_tracts <- get_acs(
+  geography = "tract",
+  variables = c(
+    educational.health.care.count = "B08126_011",
+    male.age.65.to.66 = "B01001_020",
+    male.age.67.to.69 = "B01001_021",
+    male.age.70.to.74 = "B01001_022",
+    male.age.75.to.79 = "B01001_023",
+    male.age.80.to.84 = "B01001_024",
+    male.age.85.over = "B01001_025",
+    female.age.65.to.66 = "B01001_044",
+    female.age.67.to.69 = "B01001_045",
+    female.age.70.to.74 = "B01001_046",
+    female.age.75.to.79 = "B01001_047",
+    female.age.80.to.84 = "B01001_048",
+    female.age.85.over = "B01001_049",
+    median.home.value = "B25077_001",
+    year.of.home = "B25035_001",
+    undergrad = "B14001_008"
+  ),
+  state = "NC",
+  year = 2020,
+  output = "wide",
+  geometry = TRUE
+)
+```
+
+I am using 2020 Census data to examine North Carolina at both the county
+and census tract levels. Comparing these two geographic scales will help
+show whether the relationships between the variables change depending on
+the size of the area being studied.
+
+```{r}
+nc_county <- get_acs(
+  geography = "county",
+  variables = c(
+    educational.health.care.count = "B08126_011",
+    male.age.65.to.66 = "B01001_020",
+    male.age.67.to.69 = "B01001_021",
+    male.age.70.to.74 = "B01001_022",
+    male.age.75.to.79 = "B01001_023",
+    male.age.80.to.84 = "B01001_024",
+    male.age.85.over = "B01001_025",
+    female.age.65.to.66 = "B01001_044",
+    female.age.67.to.69 = "B01001_045",
+    female.age.70.to.74 = "B01001_046",
+    female.age.75.to.79 = "B01001_047",
+    female.age.80.to.84 = "B01001_048",
+    female.age.85.over = "B01001_049",
+    median.home.value = "B25077_001",
+    year.of.home = "B25035_001",
+    undergrad = "B14001_008"
+  ),
+  state = "NC",
+  year = 2020,
+  output = "wide",
+  geometry = TRUE
+)
+```
+
+# Methods
+
+> To prepare the data for the regression models, I calculated the
+> elderly population by adding together the number of men and women aged
+> 65 and older. I did this for both census tracts and counties so I
+> could compare the results at different geographic scales.
+
+```{r}
+nc_tracts <- nc_tracts |>
+  mutate(
+    elderly = male.age.65.to.66E +
+      male.age.67.to.69E +
+      male.age.70.to.74E +
+      male.age.75.to.79E +
+      male.age.80.to.84E +
+      male.age.85.overE +
+      female.age.65.to.66E +
+      female.age.67.to.69E +
+      female.age.70.to.74E +
+      female.age.75.to.79E +
+      female.age.80.to.84E +
+      female.age.85.overE
+  )
+
+nc_county <- nc_county |>
+  mutate(
+    elderly = male.age.65.to.66E +
+      male.age.67.to.69E +
+      male.age.70.to.74E +
+      male.age.75.to.79E +
+      male.age.80.to.84E +
+      male.age.85.overE +
+      female.age.65.to.66E +
+      female.age.67.to.69E +
+      female.age.70.to.74E +
+      female.age.75.to.79E +
+      female.age.80.to.84E +
+      female.age.85.overE
+  )
+```
+
+> Some census tracts have missing information for median home value or
+> the year homes were built. I removed these observations so they would
+> not interfere with the regression analysis.
+
+```{r}
+nc_tracts <- nc_tracts |>
+  drop_na(median.home.valueE, year.of.homeE) |>
+  filter(year.of.homeE > 1000)
+```
+
+### First Model: Elderly Population and Education/Healthcare Employment
+
+```{r}
+first.model.tract <- lm(
+  educational.health.care.countE ~ elderly,
+  data = nc_tracts
+)
+
+summary(first.model.tract)
+```
+
+The results show a positive relationship between the elderly population
+and the number of educational and healthcare workers at the census tract
+level. The elderly variable has a coefficient of 0.242, meaning that
+each additional elderly resident is associated with approximately 0.24
+more workers. Both the elderly variable and the overall model have
+p-values below 0.05, making them statistically significant. However, the
+adjusted R-squared is 0.1233, meaning the model only explains about
+12.3% of the variation in educational and healthcare workers. This
+suggests that other factors may also influence employment in these
+fields.
+
+`### County-Level Regression`
+
+```{r}
+first.model.county <- lm(
+  educational.health.care.countE ~ elderly,
+  data = nc_county
+)
+
+summary(first.model.county)
+```
+
+At the county level, the results show a strong positive relationship
+between the elderly population and the number of educational and
+healthcare workers. The coefficient for elderly is 0.8417, meaning that
+each additional elderly resident is associated with approximately 0.84
+more workers. Both the elderly variable and the overall model have
+p-values below 0.05, showing that the relationship is statistically
+significant. The adjusted R-squared is 0.93, meaning the model explains
+about 93% of the variation in educational and healthcare workers across
+counties. This is much higher than the 12.3% explained at the census
+tract level, suggesting that the relationship appears much stronger when
+the data is analyzed at a larger geographic scale.
+
+### Graphing the Variables
+
+```{r}
+ggplot(nc_tracts, aes(
+  x = elderly,
+  y = educational.health.care.countE
+)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(
+    title = "Elderly Population and Education/Healthcare Workers",
+    subtitle = "North Carolina Census Tracts, 2020",
+    x = "Population Aged 65+",
+    y = "Education and Healthcare Workers"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(nc_county, aes(
+  x = elderly,
+  y = educational.health.care.countE
+)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(
+    title = "Elderly Population and Education/Healthcare Workers",
+    subtitle = "North Carolina Counties, 2020",
+    x = "Population Aged 65+",
+    y = "Education and Healthcare Workers"
+  ) +
+  theme_minimal()
+```
+
+When comparing the two graphs, I noticed that the relationship between
+the elderly population and education and healthcare employment is much
+stronger at the county level. The county-level graph shows that most
+points follow the regression line fairly closely, while the census tract
+graph has more scattered points. This matches the adjusted R-squared
+values, which were 0.93 for counties and 0.1233 for census tracts. One
+possible reason for this difference is that counties cover larger
+populations, so the relationship between the two variables becomes more
+noticeable when the data is grouped into larger geographic areas.
+
+### Mapping Regression Residuals
+
+```{r}
+nc_tracts$residuals <- NA_real_
+
+used_rows <- as.integer(
+  rownames(model.frame(first.model.tract))
+)
+
+nc_tracts$residuals[used_rows] <-
+  residuals(first.model.tract)
+
+# Map the residuals
+ggplot(nc_tracts) +
+  geom_sf(aes(fill = residuals), color = NA) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    na.value = "grey90"
+  ) +
+  labs(
+    title = "Regression Residuals by Census Tract",
+    subtitle = "North Carolina, 2020",
+    fill = "Residual"
+  ) +
+  theme_minimal()
+```
+
+The residual map shows how the model's predictions differ from the
+actual number of education and healthcare workers across North Carolina
+census tracts. The red areas represent places where the model
+underestimated the number of workers, while the purple areas represent
+places where it overestimated them. I noticed that some of the larger
+positive residuals appear in central North Carolina, while negative
+residuals are spread across several parts of the state. This suggests
+that the relationship between elderly population and employment is not
+the same everywhere, and other local factors may help explain the
+differences.
+
+### County level Residual Map
+
+```{r}
+nc_county$residuals <- residuals(first.model.county)
+
+ggplot(nc_county) +
+  geom_sf(aes(fill = residuals), color = "white", linewidth = 0.2) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0
+  ) +
+  labs(
+    title = "Regression Residuals by County",
+    subtitle = "North Carolina, 2020",
+    fill = "Residual"
+  ) +
+  theme_minimal()
+```
+
+The county-level residual map shows that the model does not predict
+education and healthcare employment equally well across North Carolina.
+Some counties in the north-central part of the state have positive
+residuals, meaning they have more workers than the model predicted.
+There is also a county in southeastern North Carolina with a large
+negative residual, meaning the model predicted more workers than were
+actually reported. Although the county-level regression had a high
+adjusted R-squared of 0.93, these differences show that the model still
+makes errors in certain areas. This suggests that other factors besides
+the elderly population may help explain employment patterns.
+
+## Second Model: Multiple Regressions
+
+For my second model, I wanted to see whether adding more variables would
+help explain the number of education and healthcare workers in North
+Carolina. Along with the elderly population, I included undergraduate
+enrollment and median home value to see whether these factors were also
+associated with employment in these fields.
+
+```{r}
+second.model.tract <- lm(
+  educational.health.care.countE ~ elderly +
+    undergradE + median.home.valueE,
+  data = nc_tracts
+)
+
+summary(second.model.tract)
+```
+
+For my second regression model, I included elderly population,
+undergraduate enrollment, and median home value to see whether these
+variables were related to education and healthcare employment. All three
+variables had positive coefficients and p-values below 0.05, meaning
+they were statistically significant. The elderly population had a
+coefficient of 0.2435, while undergraduate enrollment had a coefficient
+of 0.2042. Median home value also had a positive coefficient, although
+its effect per dollar was much smaller. The adjusted R-squared was
+0.2315, meaning the model explained about 23.15% of the variation in
+employment. This was an improvement from the first model, which only
+explained 12.33%.
+
+```{r}
+nc_tracts$second_residuals <- NA_real_
+
+used_rows <- as.integer(
+  rownames(model.frame(second.model.tract))
+)
+
+nc_tracts$second_residuals[used_rows] <-
+  residuals(second.model.tract)
+
+# Create residual map
+ggplot(nc_tracts) +
+  geom_sf(aes(fill = second_residuals), color = NA) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    na.value = "grey90"
+  ) +
+  labs(
+    title = "Residuals from the Multiple Regression Model",
+    subtitle = "North Carolina Census Tracts, 2020",
+    fill = "Residual"
+  ) +
+  theme_minimal()
+```
+
+The residual map for my second model shows that there are still
+differences between the predicted and actual number of education and
+healthcare workers across North Carolina. Some areas have positive
+residuals, while others have negative residuals, meaning the model
+underestimates employment in some places and overestimates it in others.
+Compared to the first model, the second model explains more variation
+because it includes additional variables like undergraduate enrollment
+and median home value. However, the residuals show that there are still
+other factors affecting employment that the model does not account for.
+
+# Results
+
+Overall, my results show that elderly population has a positive
+relationship with education and healthcare employment in North Carolina.
+The first regression model had an adjusted R-squared of 0.1233 at the
+census tract level, compared to 0.93 at the county level. This suggests
+that the relationship is much stronger when looking at larger geographic
+areas. My second model included undergraduate enrollment and median home
+value, which increased the adjusted R-squared to 0.2315 at the census
+tract level. All three variables were statistically significant, but the
+residual maps showed that the models still had prediction errors in
+different parts of the state.
+
+# Conclusion
+
+This analysis helped me understand how linear regression can be used to
+examine relationships between demographic characteristics and
+employment. I found that elderly population was positively associated
+with education and healthcare employment, especially at the county
+level. Adding undergraduate enrollment and median home value improved
+the census tract model, but it still did not explain all of the
+variation. One limitation is that counties with larger populations
+naturally tend to have more elderly residents and workers, which may
+affect the results. Overall, this assignment showed me that both the
+variables included in a model and the geographic scale of the analysis
+can influence the results.
+
+# Reflection Questions
+
+## How long did the assignment take you to complete?
+
+Around 2-3 hours
+
+## Where did you get stuck? Where did you go for help?
+
+I initially got stuck when trying to download the Census data because
+RStudio could not find a function, and I realized that I needed to load
+the tidycensus package before running the code.
+
+## Did you find any errors in the assignment?
+
+I realized that some of the instructions referenced Assignment 7 even
+though this was Assignment 8.
