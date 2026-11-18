@@ -38,3 +38,7 @@ Assignment8.html — Complete report with statistical outputs and visualizations
 ## Limitations:
 
 Because the analysis uses population counts, differences in geographic population size may influence the observed relationships. The results demonstrate statistical associations rather than causal effects.
+
+## View the Full Analysis
+
+[View the completed analysis and visualizations](Assignment8.html)
